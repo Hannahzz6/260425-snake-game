@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake — Made by Rianna</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f9f7f4;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    #app { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; width: 100%; max-width: 420px; }
+    #brand { font-size: 11px; letter-spacing: 0.12em; color: #999; text-transform: uppercase; }
+    #game-title { font-size: 24px; font-weight: 500; color: #1a1a1a; letter-spacing: 0.05em; }
+    #header { display: flex; justify-content: space-between; width: 400px; gap: 8px; }
+    .score-box { flex: 1; background: #f0ede8; border: 0.5px solid #e0ddd8; border-radius: 8px; padding: 6px 10px; text-align: center; }
+    .score-label { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 0.06em; }
+    .score-val { font-size: 18px; font-weight: 500; color: #1a1a1a; }
+    .score-val.target { color: #1D9E75; }
+    #wrap { position: relative; }
+    canvas { border: 0.5px solid #ddd; border-radius: 8px; display: block; }
+    #overlay {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.62); border-radius: 8px; gap: 10px; padding: 1rem;
+    }
+    #overlay h2 { color: #fff; font-size: 20px; font-weight: 500; }
+    #overlay p { color: rgba(255,255,255,0.7); font-size: 13px; text-align: center; }
+    .level-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 300px; }
+    .lvl-btn {
+      background: rgba(255,255,255,0.1); border: 0.5px solid rgba(255,255,255,0.25);
+      border-radius: 8px; color: #fff; padding: 10px 6px; cursor: pointer;
+      text-align: center; transition: background 0.15s;
+    }
+    .lvl-btn:hover { background: rgba(255,255,255,0.22); }
+    .lvl-btn .lvl-name { font-size: 13px; font-weight: 500; }
+    .lvl-btn .lvl-desc { font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 2px; }
+    .lvl-btn.locked { opacity: 0.4; cursor: default; pointer-events: none; }
+    .lvl-btn.cleared { border-color: rgba(29,158,117,0.7); }
+    .lvl-btn.cleared .lvl-name::after { content: ' ✓'; color: #9FE1CB; font-size: 11px; }
+    .ov-btn {
+      background: rgba(255,255,255,0.15); border: 0.5px solid rgba(255,255,255,0.3);
+      border-radius: 8px; color: #fff; padding: 10px 32px; font-size: 14px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .ov-btn:hover { background: rgba(255,255,255,0.25); }
+    .ov-btn.small { font-size: 12px; padding: 6px 20px; }
+    .ov-btn.highlight {
+      background: rgba(29,158,117,0.4); border-color: rgba(29,158,117,0.7); font-weight: 500;
+    }
+    .ov-btn.highlight:hover { background: rgba(29,158,117,0.55); }
+    #dpad { display: grid; grid-template-columns: repeat(3, 44px); gap: 4px; }
+    #dpad button {
+      width: 44px; height: 44px; padding: 0; font-size: 16px;
+      background: transparent; border: 0.5px solid #ccc;
+      border-radius: 8px; color: #333; cursor: pointer; transition: background 0.1s;
+    }
+    #dpad button:hover { background: #f0ede8; }
+    #dpad span { width: 44px; height: 44px; }
+    #footer { font-size: 11px; color: #bbb; letter-spacing: 0.08em; margin-top: 4px; }
+    .progress-bar-wrap { width: 280px; height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: #1D9E75; border-radius: 3px; transition: width 0.3s; }
+    .btn-row { display: flex; gap: 8px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="brand">Made by Rianna</div>
+  <div id="game-title">Snake</div>
+  <div id="header">
+    <div class="score-box"><div class="score-label">分数</div><div class="score-val" id="score">0</div></div>
+    <div class="score-box"><div class="score-label">目标</div><div class="score-val target" id="target">—</div></div>
+    <div class="score-box"><div class="score-label">最高分</div><div class="score-val" id="best">0</div></div>
+    <div class="score-box"><div class="score-label">速度</div><div class="score-val" id="spd">1</div></div>
+  </div>
+  <div id="wrap">
+    <canvas id="canvas" width="400" height="400"></canvas>
+    <div id="overlay"></div>
+  </div>
+  <div id="dpad">
+    <span></span><button id="up">↑</button><span></span>
+    <button id="left">←</button><span></span><button id="right">→</button>
+    <span></span><button id="down">↓</button><span></span>
+  </div>
+  <div id="footer">© Rianna · Snake Game</div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const COLS = 20, ROWS = 20, CELL = 20;
+
+const Z_WALLS = [
+  {x:4,y:3},{x:5,y:3},{x:6,y:3},{x:7,y:3},{x:8,y:3},{x:9,y:3},{x:10,y:3},{x:11,y:3},{x:12,y:3},{x:13,y:3},{x:14,y:3},{x:15,y:3},
+  {x:14,y:4},{x:13,y:5},{x:12,y:6},{x:11,y:7},{x:10,y:8},{x:9,y:9},{x:8,y:10},{x:7,y:11},{x:6,y:12},{x:5,y:13},{x:4,y:14},
+  {x:4,y:15},{x:5,y:15},{x:6,y:15},{x:7,y:15},{x:8,y:15},{x:9,y:15},{x:10,y:15},{x:11,y:15},{x:12,y:15},{x:13,y:15},{x:14,y:15},{x:15,y:15},
+];
+const S_WALLS = [
+  {x:6,y:3},{x:7,y:3},{x:8,y:3},{x:9,y:3},{x:10,y:3},{x:11,y:3},{x:12,y:3},{x:13,y:3},
+  {x:5,y:4},{x:5,y:5},{x:5,y:6},{x:14,y:4},
+  {x:6,y:7},{x:7,y:7},{x:8,y:7},{x:9,y:7},{x:10,y:7},{x:11,y:7},{x:12,y:7},{x:13,y:7},
+  {x:5,y:13},{x:5,y:14},
+  {x:14,y:8},{x:14,y:9},{x:14,y:10},{x:14,y:11},{x:14,y:12},{x:14,y:13},
+  {x:5,y:14},{x:6,y:14},{x:7,y:14},{x:8,y:14},{x:9,y:14},{x:10,y:14},{x:11,y:14},{x:12,y:14},{x:13,y:14},
+];
+const R_WALLS = [
+  {x:5,y:3},{x:5,y:4},{x:5,y:5},{x:5,y:6},{x:5,y:7},{x:5,y:8},{x:5,y:9},{x:5,y:10},{x:5,y:11},{x:5,y:12},{x:5,y:13},{x:5,y:14},{x:5,y:15},{x:5,y:16},
+  {x:6,y:3},{x:7,y:3},{x:8,y:3},{x:9,y:3},{x:10,y:3},{x:11,y:3},
+  {x:12,y:4},{x:13,y:5},{x:13,y:6},{x:13,y:7},{x:12,y:8},
+  {x:6,y:9},{x:7,y:9},{x:8,y:9},{x:9,y:9},{x:10,y:9},{x:11,y:9},
+  {x:11,y:10},{x:12,y:11},{x:13,y:12},{x:13,y:13},{x:13,y:14},{x:13,y:15},{x:13,y:16},
+];
+
+const LEVELS = [
+  { name:'粉红折痕', desc:'入门 · 斜线分野', target:8,
+    color:'#D4537E', headColor:'#993556', foodColor:'#D85A30', bgColor:'#FFF5F8',
+    wallColor:'#F4C0D1', walls:Z_WALLS, speed:420, watermarkColor:'rgba(212,83,126,0.06)' },
+  { name:'星途蜿蜒', desc:'普通 · 双弯穿行', target:12,
+    color:'#534AB7', headColor:'#3C3489', foodColor:'#BA7517', bgColor:'#F5F4FF',
+    wallColor:'#CECBF6', walls:S_WALLS, speed:350, watermarkColor:'rgba(83,74,183,0.06)' },
+  { name:'烙印迷途', desc:'困难 · 专属印记', target:15,
+    color:'#1D9E75', headColor:'#0F6E56', foodColor:'#E24B4A', bgColor:'#F0FBF7',
+    wallColor:'#9FE1CB', walls:R_WALLS, speed:290, watermarkColor:'rgba(29,158,117,0.06)' },
+  { name:'迷宫深处', desc:'专家 · 四方封锁', target:18,
+    color:'#BA7517', headColor:'#854F0B', foodColor:'#534AB7', bgColor:'#FFFBF0',
+    wallColor:'#EF9F27',
+    walls:[{x:2,y:2},{x:3,y:2},{x:4,y:2},{x:5,y:2},{x:2,y:3},{x:2,y:4},{x:2,y:5},{x:17,y:2},{x:16,y:2},{x:15,y:2},{x:17,y:3},{x:17,y:4},{x:17,y:5},{x:2,y:17},{x:3,y:17},{x:4,y:17},{x:5,y:17},{x:2,y:16},{x:2,y:15},{x:17,y:17},{x:16,y:17},{x:15,y:17},{x:17,y:16},{x:17,y:15},{x:8,y:6},{x:9,y:6},{x:10,y:6},{x:11,y:6},{x:8,y:13},{x:9,y:13},{x:10,y:13},{x:11,y:13},{x:6,y:8},{x:6,y:9},{x:6,y:10},{x:6,y:11},{x:13,y:8},{x:13,y:9},{x:13,y:10},{x:13,y:11}],
+    speed:240, watermarkColor:'rgba(186,117,23,0.06)' },
+  { name:'无尽彩蛋', desc:'彩蛋 · 全力以赴', target:20,
+    color:'#D85A30', headColor:'#993C1D', foodColor:'#534AB7', bgColor:'#FFF8F5',
+    wallColor:'#F0997B', walls:R_WALLS, speed:280, watermarkColor:'rgba(216,90,48,0.07)' },
+  { name:'???', desc:'敬请期待', locked:true, target:0,
+    color:'#888', headColor:'#555', foodColor:'#888', bgColor:'#f5f5f5', walls:[], speed:400, watermarkColor:'rgba(0,0,0,0.04)' },
+];
+
+const clearedLevels = new Set();
+let snake, dir, nextDir, food, score, best=0, gameLoop, running=false, currentLevel=null, currentLevelIndex=0;
+
+function drawWatermark(lv) {
+  ctx.save();
+  ctx.font = 'bold 260px serif';
+  ctx.fillStyle = lv.watermarkColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('R', 200, 205);
+  ctx.restore();
+}
+
+function getStars(score, target) {
+  if (score >= target * 1.5) return 3;
+  if (score >= target * 1.2) return 2;
+  return 1;
+}
+
+function showMenu() {
+  running = false;
+  clearInterval(gameLoop);
+  overlay.style.display = 'flex';
+  overlay.innerHTML = '';
+
+  const tag = document.createElement('div');
+  tag.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.45);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;';
+  tag.textContent = 'Made by Rianna';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = '选择关卡';
+
+  const grid = document.createElement('div');
+  grid.className = 'level-grid';
+  LEVELS.forEach((lv, i) => {
+    const btn = document.createElement('div');
+    const isCleared = clearedLevels.has(i);
+    btn.className = 'lvl-btn' + (lv.locked ? ' locked' : '') + (isCleared ? ' cleared' : '');
+    btn.innerHTML = `<div class="lvl-name">${lv.name}</div><div class="lvl-desc">${lv.locked ? lv.desc : '目标 ' + lv.target + ' 分'}</div>`;
+    if (!lv.locked) btn.addEventListener('click', () => startLevel(i));
+    grid.appendChild(btn);
+  });
+
+  overlay.appendChild(tag);
+  overlay.appendChild(h2);
+  overlay.appendChild(grid);
+}
+
+function showLevelClear() {
+  overlay.style.display = 'flex';
+  overlay.innerHTML = '';
+  clearedLevels.add(currentLevelIndex);
+
+  const stars = getStars(score, currentLevel.target);
+  const starStr = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+  const hasNext = currentLevelIndex < LEVELS.length - 2;
+
+  const tag = document.createElement('div');
+  tag.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.45);letter-spacing:0.1em;text-transform:uppercase;';
+  tag.textContent = 'Made by Rianna';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = '通关！';
+
+  const starRow = document.createElement('div');
+  starRow.style.cssText = 'font-size:28px;letter-spacing:4px;color:#FAC775;';
+  starRow.textContent = starStr;
+
+  const p = document.createElement('p');
+  p.textContent = `得分 ${score} 分　目标 ${currentLevel.target} 分`;
+
+  overlay.appendChild(tag);
+  overlay.appendChild(h2);
+  overlay.appendChild(starRow);
+  overlay.appendChild(p);
+
+  if (!hasNext) {
+    const allDone = document.createElement('p');
+    allDone.style.cssText = 'color:#FAC775;font-size:15px;font-weight:500;';
+    allDone.textContent = '全部关卡通关！';
+    overlay.appendChild(allDone);
+  }
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'btn-row';
+
+  const replayBtn = document.createElement('button');
+  replayBtn.className = 'ov-btn small';
+  replayBtn.textContent = '再玩一次';
+  replayBtn.addEventListener('click', () => init());
+  btnRow.appendChild(replayBtn);
+
+  const menuBtn = document.createElement('button');
+  menuBtn.className = 'ov-btn small';
+  menuBtn.textContent = '选择关卡';
+  menuBtn.addEventListener('click', showMenu);
+  btnRow.appendChild(menuBtn);
+
+  overlay.appendChild(btnRow);
+
+  if (hasNext) {
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'ov-btn highlight';
+    nextBtn.textContent = `下一关：${LEVELS[currentLevelIndex + 1].name} →`;
+    nextBtn.addEventListener('click', () => startLevel(currentLevelIndex + 1));
+    overlay.appendChild(nextBtn);
+  }
+}
+
+function showGameOver() {
+  overlay.style.display = 'flex';
+  overlay.innerHTML = '';
+
+  const tag = document.createElement('div');
+  tag.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.45);letter-spacing:0.1em;text-transform:uppercase;';
+  tag.textContent = 'Made by Rianna';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = '游戏结束';
+
+  const pct = Math.min(100, Math.round(score / currentLevel.target * 100));
+  const prog = document.createElement('div');
+  prog.className = 'progress-bar-wrap';
+  const fill = document.createElement('div');
+  fill.className = 'progress-bar-fill';
+  fill.style.width = pct + '%';
+  prog.appendChild(fill);
+
+  const p = document.createElement('p');
+  p.textContent = `得分 ${score} / 目标 ${currentLevel.target} 分（${pct}%）`;
+
+  const replayBtn = document.createElement('button');
+  replayBtn.className = 'ov-btn';
+  replayBtn.textContent = '再试一次';
+  replayBtn.addEventListener('click', () => init());
+
+  const menuBtn = document.createElement('button');
+  menuBtn.className = 'ov-btn small';
+  menuBtn.textContent = '选择关卡';
+  menuBtn.addEventListener('click', showMenu);
+
+  overlay.appendChild(tag);
+  overlay.appendChild(h2);
+  overlay.appendChild(prog);
+  overlay.appendChild(p);
+  overlay.appendChild(replayBtn);
+  overlay.appendChild(menuBtn);
+}
+
+function startLevel(i) {
+  currentLevelIndex = i;
+  currentLevel = LEVELS[i];
+  document.getElementById('target').textContent = currentLevel.target;
+  init();
+}
+
+function init() {
+  snake = [{x:2,y:10},{x:1,y:10},{x:0,y:10}];
+  dir = {x:1,y:0}; nextDir = {x:1,y:0};
+  score = 0; running = true;
+  overlay.style.display = 'none';
+  placeFood(); updateUI();
+  clearInterval(gameLoop);
+  gameLoop = setInterval(tick, getSpeed());
+  draw();
+}
+
+function getSpeed() { return Math.max(150, currentLevel.speed - Math.floor(score / 5) * 15); }
+
+function placeFood() {
+  let pos, attempts = 0;
+  do {
+    pos = {x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)};
+    attempts++;
+  } while (attempts < 300 && (snake.some(s=>s.x===pos.x&&s.y===pos.y) || currentLevel.walls.some(w=>w.x===pos.x&&w.y===pos.y)));
+  food = pos;
+}
+
+function tick() {
+  dir = nextDir;
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+  if (head.x<0||head.x>=COLS||head.y<0||head.y>=ROWS||snake.some(s=>s.x===head.x&&s.y===head.y)||currentLevel.walls.some(w=>w.x===head.x&&w.y===head.y)) {
+    gameOver(); return;
+  }
+  snake.unshift(head);
+  if (head.x===food.x && head.y===food.y) {
+    score++;
+    if (score > best) best = score;
+    updateUI();
+    if (score >= currentLevel.target) {
+      clearInterval(gameLoop); running = false;
+      draw();
+      setTimeout(showLevelClear, 400);
+      return;
+    }
+    placeFood();
+    clearInterval(gameLoop);
+    gameLoop = setInterval(tick, getSpeed());
+  } else { snake.pop(); }
+  draw();
+}
+
+function draw() {
+  const lv = currentLevel;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = lv.bgColor;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  drawWatermark(lv);
+
+  for(let x=0;x<COLS;x++) for(let y=0;y<ROWS;y++) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+    ctx.strokeRect(x*CELL,y*CELL,CELL,CELL);
+  }
+  lv.walls.forEach(w => {
+    ctx.fillStyle = lv.wallColor || '#ccc';
+    ctx.beginPath();
+    ctx.roundRect(w.x*CELL+1,w.y*CELL+1,CELL-2,CELL-2,3);
+    ctx.fill();
+  });
+  snake.forEach((s,i) => {
+    ctx.fillStyle = i===0 ? lv.headColor : lv.color;
+    ctx.beginPath();
+    ctx.roundRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2,i===0?6:4);
+    ctx.fill();
+  });
+  ctx.fillStyle = lv.foodColor;
+  ctx.beginPath();
+  ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL/2-2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('♥', food.x*CELL+CELL/2, food.y*CELL+CELL/2);
+
+  const pct = Math.min(1, score / currentLevel.target);
+  ctx.fillStyle = 'rgba(29,158,117,0.2)';
+  ctx.fillRect(0, 396, canvas.width, 4);
+  ctx.fillStyle = '#1D9E75';
+  ctx.fillRect(0, 396, canvas.width * pct, 4);
+}
+
+function gameOver() {
+  clearInterval(gameLoop); running = false;
+  showGameOver();
+}
+
+function updateUI() {
+  document.getElementById('score').textContent = score;
+  document.getElementById('best').textContent = best;
+  document.getElementById('spd').textContent = Math.floor(score/5) + 1;
+}
+
+const moves = {ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0}};
+document.addEventListener('keydown', e => {
+  if (moves[e.key] && running) {
+    const m = moves[e.key];
+    if (m.x !== -dir.x || m.y !== -dir.y) nextDir = m;
+    e.preventDefault();
+  }
+});
+document.getElementById('up').addEventListener('click', () => { if(running&&dir.y!==1) nextDir={x:0,y:-1}; });
+document.getElementById('down').addEventListener('click', () => { if(running&&dir.y!==-1) nextDir={x:0,y:1}; });
+document.getElementById('left').addEventListener('click', () => { if(running&&dir.x!==1) nextDir={x:-1,y:0}; });
+document.getElementById('right').addEventListener('click', () => { if(running&&dir.x!==-1) nextDir={x:1,y:0}; });
+
+showMenu();
+</script>
+</body>
+</html>
